@@ -1,0 +1,34 @@
+{
+    "name": "ds_param_folderlevel",
+    "properties": {
+        "linkedServiceName": {
+            "referenceName": "AzureDataLakeStorage_LinkedService",
+            "type": "LinkedServiceReference"
+        },
+        "parameters": {
+            "param_container": {
+                "type": "string"
+            },
+            "param_folder": {
+                "type": "string"
+            }
+        },
+        "annotations": [],
+        "type": "Parquet",
+        "typeProperties": {
+            "location": {
+                "type": "AzureBlobFSLocation",
+                "folderPath": {
+                    "value": "@dataset().param_folder",
+                    "type": "Expression"
+                },
+                "fileSystem": {
+                    "value": "@dataset().param_container",
+                    "type": "Expression"
+                }
+            },
+            "compressionCodec": "snappy"
+        },
+        "schema": []
+    }
+}

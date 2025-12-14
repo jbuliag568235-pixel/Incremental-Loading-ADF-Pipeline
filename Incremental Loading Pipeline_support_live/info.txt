@@ -1,0 +1,6 @@
+selected resource name:		Incremental Loading Pipeline
+selected resource type:		pipeline
+factory name:			nyc-taxi-azure-data-factory
+factory location:		southeastasia
+subscription id:		e2b951a9-a146-4eee-852b-013e70a29a1c
+time of download (UTC):		Sun, 14 Dec 2025 11:48:15 GMT

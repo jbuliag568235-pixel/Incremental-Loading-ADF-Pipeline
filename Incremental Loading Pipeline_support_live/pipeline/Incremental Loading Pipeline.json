@@ -1,0 +1,248 @@
+{
+    "name": "Incremental Loading Pipeline",
+    "properties": {
+        "activities": [
+            {
+                "name": "Get Metadata - Child Items",
+                "type": "GetMetadata",
+                "dependsOn": [],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "dataset": {
+                        "referenceName": "ds_param_folderlevel",
+                        "type": "DatasetReference",
+                        "parameters": {
+                            "param_container": "company-raw-data",
+                            "param_folder": "trip-data"
+                        }
+                    },
+                    "fieldList": [
+                        "childItems"
+                    ],
+                    "storeSettings": {
+                        "type": "AzureBlobFSReadSettings",
+                        "enablePartitionDiscovery": false
+                    },
+                    "formatSettings": {
+                        "type": "ParquetReadSettings"
+                    }
+                }
+            },
+            {
+                "name": "ForEach ChildItems",
+                "type": "ForEach",
+                "dependsOn": [
+                    {
+                        "activity": "Get Metadata - Child Items",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "userProperties": [],
+                "typeProperties": {
+                    "items": {
+                        "value": "@activity('Get Metadata - Child Items').output.childItems",
+                        "type": "Expression"
+                    },
+                    "isSequential": true,
+                    "activities": [
+                        {
+                            "name": "Get Metadata - LastModified",
+                            "type": "GetMetadata",
+                            "dependsOn": [],
+                            "policy": {
+                                "timeout": "0.12:00:00",
+                                "retry": 0,
+                                "retryIntervalInSeconds": 30,
+                                "secureOutput": false,
+                                "secureInput": false
+                            },
+                            "userProperties": [],
+                            "typeProperties": {
+                                "dataset": {
+                                    "referenceName": "ds_last_modified",
+                                    "type": "DatasetReference",
+                                    "parameters": {
+                                        "param_container": "company-raw-data",
+                                        "param_folder": "trip-data",
+                                        "param_file": {
+                                            "value": "@item().name",
+                                            "type": "Expression"
+                                        }
+                                    }
+                                },
+                                "fieldList": [
+                                    "lastModified"
+                                ],
+                                "storeSettings": {
+                                    "type": "AzureBlobFSReadSettings",
+                                    "enablePartitionDiscovery": false
+                                },
+                                "formatSettings": {
+                                    "type": "ParquetReadSettings"
+                                }
+                            }
+                        },
+                        {
+                            "name": "If GetMetadata LastModified is Greater",
+                            "type": "IfCondition",
+                            "dependsOn": [
+                                {
+                                    "activity": "Get Metadata - LastModified",
+                                    "dependencyConditions": [
+                                        "Succeeded"
+                                    ]
+                                }
+                            ],
+                            "userProperties": [],
+                            "typeProperties": {
+                                "expression": {
+                                    "value": "@greater(\n    activity('Get Metadata - LastModified').output, \n    variables('tem_get_lastmodified_value')\n)",
+                                    "type": "Expression"
+                                },
+                                "ifTrueActivities": [
+                                    {
+                                        "name": "Update Temp LastModified Variable",
+                                        "type": "SetVariable",
+                                        "dependsOn": [],
+                                        "policy": {
+                                            "secureOutput": false,
+                                            "secureInput": false
+                                        },
+                                        "userProperties": [],
+                                        "typeProperties": {
+                                            "variableName": "tem_get_lastmodified_value",
+                                            "value": {
+                                                "value": "@activity('Get Metadata - LastModified').output.lastModified",
+                                                "type": "Expression"
+                                            }
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            },
+            {
+                "name": "Copy data",
+                "type": "Copy",
+                "dependsOn": [
+                    {
+                        "activity": "Update Prev LastModified Variable",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "source": {
+                        "type": "ParquetSource",
+                        "storeSettings": {
+                            "type": "AzureBlobFSReadSettings",
+                            "recursive": true,
+                            "modifiedDatetimeStart": {
+                                "value": "@variables('prev_lastmodified_value')",
+                                "type": "Expression"
+                            },
+                            "wildcardFileName": "*.parquet",
+                            "enablePartitionDiscovery": false
+                        },
+                        "formatSettings": {
+                            "type": "ParquetReadSettings"
+                        }
+                    },
+                    "sink": {
+                        "type": "ParquetSink",
+                        "storeSettings": {
+                            "type": "AzureBlobFSWriteSettings"
+                        },
+                        "formatSettings": {
+                            "type": "ParquetWriteSettings"
+                        }
+                    },
+                    "enableStaging": false,
+                    "translator": {
+                        "type": "TabularTranslator",
+                        "typeConversion": true,
+                        "typeConversionSettings": {
+                            "allowDataTruncation": true,
+                            "treatBooleanAsNumber": false
+                        }
+                    }
+                },
+                "inputs": [
+                    {
+                        "referenceName": "ds_param_folderlevel",
+                        "type": "DatasetReference",
+                        "parameters": {
+                            "param_container": "company-raw-data",
+                            "param_folder": "trip-data"
+                        }
+                    }
+                ],
+                "outputs": [
+                    {
+                        "referenceName": "ds_param_folderlevel",
+                        "type": "DatasetReference",
+                        "parameters": {
+                            "param_container": "bronze",
+                            "param_folder": "trip-data"
+                        }
+                    }
+                ]
+            },
+            {
+                "name": "Update Prev LastModified Variable",
+                "type": "SetVariable",
+                "dependsOn": [
+                    {
+                        "activity": "ForEach ChildItems",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "variableName": "prev_lastmodified_value",
+                    "value": {
+                        "value": "@variables('tem_get_lastmodified_value')",
+                        "type": "Expression"
+                    }
+                }
+            }
+        ],
+        "variables": {
+            "tem_get_lastmodified_value": {
+                "type": "String",
+                "defaultValue": "2020-12-14T09:29:14Z"
+            },
+            "prev_lastmodified_value": {
+                "type": "String",
+                "defaultValue": "2020-12-14T09:29:14Z"
+            }
+        },
+        "annotations": []
+    }
+}
